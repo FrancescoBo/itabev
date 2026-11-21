@@ -1,0 +1,25 @@
+name: Aggiorna tabella EV
+on:
+  workflow_dispatch:        # pulsante "Run workflow" manuale
+  schedule:
+    - cron: "0 5 1 * *"     # il 1 di ogni mese
+permissions:
+  contents: write
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt && playwright install --with-deps chromium
+      - run: python scrape.py --debug
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: debug, path: debug/ }
+      - name: Commit risultati
+        run: |
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git add data index.html && git commit -m "Aggiornamento dati $(date +%F)" || echo "nessuna modifica"
+          git push
