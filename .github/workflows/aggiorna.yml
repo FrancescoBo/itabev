@@ -1,8 +1,13 @@
 name: Aggiorna tabella EV
 on:
-  workflow_dispatch:        # pulsante "Run workflow" manuale
+  workflow_dispatch:
+    inputs:
+      modelli:
+        description: "Prova: modelli separati da spazio (es. tesla/model-3 dacia/spring). Vuoto = tutto il listino"
+        required: false
+        default: ""
   schedule:
-    - cron: "0 5 1 * *"     # il 1 di ogni mese
+    - cron: "0 5 1 * *"     # il 1 di ogni mese, listino completo
 permissions:
   contents: write
 jobs:
@@ -14,7 +19,11 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r requirements.txt && playwright install --with-deps chromium
-      - run: python scrape.py --debug
+      - name: Scraper
+        env:
+          MODELLI: ${{ github.event.inputs.modelli }}
+        run: |
+          if [ -n "$MODELLI" ]; then python scrape.py --debug --models $MODELLI; else python scrape.py --debug; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: debug, path: debug/ }
