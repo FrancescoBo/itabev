@@ -74,7 +74,8 @@ def discover_models():
 
         def models_now():
             return {f"{m.group(1)}/{m.group(2)}" for m in rx.finditer(pg.content())
-                    if not re.match(r"(ricerca|offerte|marche|source)", m.group(1))}
+                    if not re.match(r"(ricerca|offerte|marche|source)", m.group(1))
+                    and "quattroruote" not in m.group(0).lower()}
 
         stale, prev = 0, 0
         for _ in range(80):
@@ -104,9 +105,13 @@ def discover_models():
 def model_versions(model):
     html = fetch(f"{BASE}/listino/{model}")
     if not html:
-        return {}
+        return {}, None
     dump("modello_" + model, html)
     soup = BeautifulSoup(html, "html.parser")
+    h1 = soup.find("h1")
+    title = re.sub(r"\s+", " ", h1.get_text(" ", strip=True)) if h1 else None
+    if title and ("quattroruote" in title.lower() or "/" in title):   # titolo spurio (es. Polestar)
+        title = None
     out = {}
     pages = [soup]
     for a in soup.find_all("a", string=re.compile(r"Tutti gli allestimenti", re.I)):  # elenco completo
@@ -130,7 +135,7 @@ def model_versions(model):
             stato = "esaurimento scorte" if re.search(r"esaurimento\s+scorte", txt, re.I) else "disponibile"
             if url not in out or stato != "disponibile":
                 out[url] = stato
-    return out
+    return out, title
 
 
 # ---------- pagina allestimento ----------
@@ -275,7 +280,14 @@ def process_model(mod):
     """Tutti gli allestimenti BEV di un modello (+ stato esaurimento)."""
     rows, scart = [], []
     marca, nome = mod.split("/", 1)
-    for url, stato in model_versions(mod).items():
+    vers, title = model_versions(mod)
+    if title and title.lower().startswith(marca.replace("-", " ").lower()):
+        etichetta = marca.replace("-", " ").upper() + title[len(marca):]
+    elif title:
+        etichetta = f"{marca.replace('-', ' ').upper()} {title}"
+    else:
+        etichetta = f"{marca.replace('-', ' ').upper()} {nome}"
+    for url, stato in vers.items():
         if ICE.search(slug(url)):
             continue
         d = get_version(url)
@@ -285,8 +297,9 @@ def process_model(mod):
             scart.append({"url": url, "motivo": "non BEV (o scheda non riconosciuta)"})
         else:
             d = dict(d)
-            d["allestimento"] = re.sub(r"^" + re.escape(marca) + r"\s+", "", d["allestimento"] or "", flags=re.I)
-            d["modello"] = f"{marca.upper()} {nome}"
+            nome_all = re.sub(r"-\d{9,}$", "", slug(url)).replace("-", " ")   # nome allestimento dall'URL
+            d["allestimento"] = nome_all[:1].upper() + nome_all[1:]
+            d["modello"] = etichetta
             d["stato"] = stato
             rows.append({k: d.get(k) for k in FIELDS})
     return rows, scart

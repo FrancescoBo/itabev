@@ -1,5 +1,6 @@
 """Genera index.html (autonomo, apribile con doppio clic) da data/ev_ita.json."""
 import json
+import re
 
 TEMPLATE = r"""<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><title>Auto elettriche in Italia (Quattroruote)</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -194,9 +195,32 @@ sliders();
 </script></body></html>"""
 
 
+def _nome_da_url(url):
+    n = re.sub(r"-\d{9,}$", "", url.rstrip("/").rsplit("/", 1)[-1]).replace("-", " ")
+    return n[:1].upper() + n[1:]
+
+
+def pulisci(rows):
+    """Toglie testi spuri tipo 'quattroruote.it/listino/...' (anche dall'URL) e i doppioni che ne derivano."""
+    out = {}
+    for r in rows:
+        marca, modello, ultimo = r["url"].split("/auto/")[1].split("/")[:3]
+        if "quattroruote" in modello.lower():
+            modello = re.sub(r"^quattroruoteitlistino" + re.escape(marca), "", modello) or marca
+            if "quattroruote" in modello.lower():
+                modello = marca
+            r["url"] = f"https://www.quattroruote.it/auto/{marca}/{modello}/{ultimo}"
+        if "quattroruote" in r["modello"].lower() or "/" in r["modello"]:
+            r["modello"] = marca.replace("-", " ").upper() + " " + modello
+        if "quattroruote" in r["allestimento"].lower() or "/" in r["allestimento"]:
+            r["allestimento"] = _nome_da_url(r["url"])
+        out.setdefault(ultimo, r)          # stessa versione = stesso codice finale: tieni una sola riga
+    return list(out.values())
+
+
 def build(src="data/ev_ita.json", out="index.html"):
     j = json.load(open(src, encoding="utf-8"))
-    html = (TEMPLATE.replace("__DATA__", json.dumps(j["righe"], ensure_ascii=False, separators=(",", ":")))
+    html = (TEMPLATE.replace("__DATA__", json.dumps(pulisci(j["righe"]), ensure_ascii=False, separators=(",", ":")))
             .replace("__DATE__", j["aggiornato"]).replace("__N__", str(len(j["righe"]))))
     open(out, "w", encoding="utf-8").write(html)
 
