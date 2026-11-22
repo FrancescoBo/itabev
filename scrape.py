@@ -7,7 +7,8 @@ Uso:
   python scrape.py --debug               # salva l'HTML grezzo in debug/
 Output: data/ev_ita.csv, data/ev_ita.json, data/scartate.csv, index.html
 """
-import argparse, csv, json, os, re, sys, time
+import argparse, csv, json, os, re, sys, threading, time
+import concurrent.futures as cf
 from datetime import date
 from urllib.parse import urljoin
 import requests
@@ -18,24 +19,31 @@ UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chr
 FIELDS = ["modello", "allestimento", "tipo", "posti", "cap", "h", "w", "l", "m", "pomol",
           "ppeak", "cons", "vmax", "prezzo", "anno", "autonomia", "autonomia_fonte", "stato", "url"]
 
-sess = requests.Session()
-sess.headers.update({"User-Agent": UA, "Accept-Language": "it-IT,it;q=0.9"})
 ARGS = None
+TL = threading.local()
 
 
-def fetch(url, tries=4):
+def session():
+    if not hasattr(TL, "s"):
+        TL.s = requests.Session()
+        TL.s.headers.update({"User-Agent": UA, "Accept-Language": "it-IT,it;q=0.9"})
+    return TL.s
+
+
+def fetch(url, tries=2):
     for i in range(tries):
         try:
-            r = sess.get(url, timeout=30)
+            r = session().get(url, timeout=20)
             if r.status_code == 200:
                 time.sleep(ARGS.delay)
                 return r.text
-            print(f"  HTTP {r.status_code} per {url}", file=sys.stderr)
-            if r.status_code in (403, 429):
-                time.sleep(10 * (i + 1))
+            if r.status_code == 404:
+                return None
+            print(f"  HTTP {r.status_code} {url}", file=sys.stderr, flush=True)
+            time.sleep(8 * (i + 1) if r.status_code in (403, 429) else 2)
         except requests.RequestException as e:
-            print(f"  errore rete {e}", file=sys.stderr)
-            time.sleep(5 * (i + 1))
+            print(f"  errore rete {type(e).__name__} {url}", file=sys.stderr, flush=True)
+            time.sleep(3)
     return None
 
 
@@ -48,42 +56,47 @@ def dump(name, html):
 
 # ---------- scoperta dei modelli (serve un browser: la lista si carica con JS) ----------
 def discover_models():
+    """Modelli con almeno un allestimento BEV, dal filtro 'elettrica' della ricerca Quattroruote."""
     from playwright.sync_api import sync_playwright
     found = set()
     with sync_playwright() as p:
         b = p.chromium.launch(headless=True)
-        pg = b.new_context(user_agent=UA, locale="it-IT").new_page()
-        pg.goto(BASE + "/listino/ricerca.html", wait_until="domcontentloaded", timeout=60000)
-        pg.wait_for_timeout(3000)
-        for txt in ("Accetta", "Accetta tutto", "Accetto"):  # cookie banner
+        pg = b.new_context(user_agent=UA, locale="it-IT", viewport={"width": 1366, "height": 900}).new_page()
+        pg.goto(BASE + "/listino/ricerca.html?elettrica=elettrica", wait_until="domcontentloaded", timeout=60000)
+        pg.wait_for_timeout(4000)
+        for txt in ("Accetta", "Accetto", "Consenti"):  # banner cookie, se presente
             try:
-                pg.get_by_role("button", name=re.compile(txt, re.I)).first.click(timeout=2000)
+                pg.get_by_role("button", name=re.compile(txt, re.I)).first.click(timeout=1500)
                 break
             except Exception:
                 pass
-        # tenta di filtrare su "elettrica"; se non riesce si scansiona tutto il listino
-        try:
-            pg.get_by_text(re.compile(r"^\s*elettrica\s*$", re.I)).first.click(timeout=4000)
-            pg.wait_for_timeout(3000)
-            print("Filtro 'elettrica' applicato")
-        except Exception:
-            print("ATTENZIONE: filtro 'elettrica' non applicato, scansiono tutti i modelli (molto piu' lento)")
-        for _ in range(400):
+        rx = re.compile(r"/listino/([a-z0-9._-]+)/([a-z0-9._-]+)(?=[\"'/?#])", re.I)
+
+        def models_now():
+            return {f"{m.group(1)}/{m.group(2)}" for m in rx.finditer(pg.content())
+                    if not re.match(r"(ricerca|offerte|marche|source)", m.group(1))}
+
+        stale, prev = 0, 0
+        for _ in range(80):
+            btn = pg.locator("#loadMoreCarsBtn")
+            if btn.count() == 0 or not btn.first.is_visible():
+                break
             try:
-                btn = pg.get_by_text(re.compile(r"Carica altri modelli", re.I)).first
-                if not btn.is_visible():
-                    break
-                btn.click(timeout=5000)
-                pg.wait_for_timeout(1200)
+                btn.first.scroll_into_view_if_needed(timeout=3000)
+                btn.first.click(timeout=5000)
             except Exception:
                 break
+            pg.wait_for_timeout(2500)
+            n = len(models_now())
+            stale = stale + 1 if n == prev else 0
+            prev = n
+            print(f"  ricerca: {n} modelli caricati", flush=True)
+            if stale >= 3:
+                break
         dump("ricerca", pg.content())
-        for a in pg.query_selector_all("a[href]"):
-            h = a.get_attribute("href") or ""
-            m = re.match(r"^(?:https://www\.quattroruote\.it)?/listino/([^/?#]+)/([^/?#]+)/?$", h)
-            if m:
-                found.add(f"{m.group(1)}/{m.group(2)}")
+        found = models_now()
         b.close()
+    print(f"Ricerca con filtro elettrica: {len(found)} modelli", flush=True)
     return sorted(found)
 
 
@@ -100,7 +113,7 @@ def model_versions(model):
         h2 = fetch(urljoin(BASE, a["href"]))
         if h2:
             pages.append(BeautifulSoup(h2, "html.parser"))
-    pat = re.compile(r"^(?:https://www\.quattroruote\.it)?/auto/" + re.escape(model) + r"/[^/?#]+$")
+    pat = re.compile(r"^(?:https://www\.quattroruote\.it)?/auto/" + re.escape(model.split("/")[0]) + r"/[^/?#]+/[^/?#]+$")
     for s in pages:
         links = [a for a in s.find_all("a", href=True) if pat.match(a["href"])]
         allh = {a["href"] for a in links}
@@ -184,19 +197,24 @@ def parse_version(url, html):
 
 # ---------- scoperta via sitemap (senza browser) ----------
 HINT = re.compile(r"kwh|electric|elettric|-ev-|-ev$|bev|e-tech|e-tron|e-\d|\d+e-|-e-", re.I)
+# segnali di motore termico/ibrido nello slug dell'allestimento: queste schede non si scaricano
+ICE = re.compile(r"tfsi|tsi|tdi|hdi|puretech|multijet|mjt|ecoboost|ecoblue|crdi|t-gdi|\bgdi|mhev|48v|hybrid|ibrid|phev"
+                 r"|plug-in|gpl|metano|dci|tce|vtec|skyactiv|diesel|benzina|s&s|-v6-|-v8-|-v12-"
+                 r"|(?:^|-)\d{2,3}[di](?:-|$)", re.I)
+
+
+def slug(u):
+    return u.rsplit("/", 1)[-1]
 
 
 def discover_from_sitemap(since):
-    """Ritorna {marca/modello: [(aaaamm, url), ...]} per i modelli con almeno una versione >= since."""
+    """{marca/modello: [(aaaamm, url), ...]} per i modelli con almeno una versione >= since."""
     import html as H
     urls = []
-    for n in (1, 2, 3, 4, 5):
+    for n in (1, 2, 3):
         t = fetch(f"{BASE}/Sitemap-listino-{n}.xml")
-        if not t:
-            if n > 3:
-                break
-            continue
-        urls += re.findall(r"<loc>\s*(https://www\.quattroruote\.it/auto/[^<\s]+)\s*</loc>", t)
+        if t:
+            urls += re.findall(r"<loc>\s*(https://www\.quattroruote\.it/auto/[^<\s]+)\s*</loc>", t)
     models = {}
     for u in urls:
         u = H.unescape(u)
@@ -204,31 +222,74 @@ def discover_from_sitemap(since):
         if m:
             models.setdefault(f"{m.group(1)}/{m.group(2)}", []).append((int(m.group(3)), u))
     models = {k: v for k, v in models.items() if max(x[0] for x in v) >= since}
-    print(f"Sitemap: {len(urls)} URL totali, {len(models)} modelli con versioni dal {since}")
+    print(f"Sitemap: {len(urls)} URL totali, {len(models)} modelli con versioni dal {since}", flush=True)
     return models
 
 
 def sample_urls(vers, full):
-    vers = sorted(vers, reverse=True)
+    cands = sorted([x for x in vers if not ICE.search(slug(x[1]))], reverse=True)
+    if not cands:
+        return []
     if full:
-        return [u for _, u in vers]
-    pick = [u for _, u in vers[:2]] + [u for _, u in vers if HINT.search(u.rsplit("/", 1)[-1])][:3]
-    pick.append(vers[len(vers) // 2][1])
+        return [u for _, u in cands]
+    pick = [u for _, u in cands if HINT.search(slug(u))][:2] + [u for _, u in cands[:2]] + [cands[len(cands) // 2][1]]
     return list(dict.fromkeys(pick))
 
 
 CACHE = {}
+CACHE_FILE = "cache/versions.json"
 
 
 def get_version(url):
-    if url not in CACHE:
-        html = fetch(url)
-        if html is None:
-            CACHE[url] = None
-        else:
-            dump("allest_" + url.rsplit("/", 1)[-1], html)
-            CACHE[url] = parse_version(url, html)
+    if url in CACHE:
+        return CACHE[url]
+    html = fetch(url)
+    if html is None:
+        return None            # non in cache: si puo' ritentare
+    dump("allest_" + slug(url), html)
+    CACHE[url] = parse_version(url, html)
     return CACHE[url]
+
+
+def save_cache():
+    os.makedirs("cache", exist_ok=True)
+    json.dump(CACHE, open(CACHE_FILE, "w", encoding="utf-8"), ensure_ascii=False)
+
+
+def pmap(fn, items, label, workers, deadline):
+    out, done, t0 = {}, 0, time.time()
+    with cf.ThreadPoolExecutor(workers) as ex:
+        futs = {}
+        for it in items:
+            futs[ex.submit(lambda x=it: None if time.time() > deadline else fn(x))] = it
+        for f in cf.as_completed(futs):
+            out[futs[f]] = f.result()
+            done += 1
+            if done % 25 == 0 or done == len(items):
+                el = time.time() - t0
+                print(f"[{label}] {done}/{len(items)}  trascorsi {el/60:.1f} min, stima rimanente {el/done*(len(items)-done)/60:.1f} min", flush=True)
+    return out
+
+
+def process_model(mod):
+    """Tutti gli allestimenti BEV di un modello (+ stato esaurimento)."""
+    rows, scart = [], []
+    marca, nome = mod.split("/", 1)
+    for url, stato in model_versions(mod).items():
+        if ICE.search(slug(url)):
+            continue
+        d = get_version(url)
+        if d is None:
+            scart.append({"url": url, "motivo": "pagina non scaricata"})
+        elif not d.get("_bev"):
+            scart.append({"url": url, "motivo": "non BEV (o scheda non riconosciuta)"})
+        else:
+            d = dict(d)
+            d["allestimento"] = re.sub(r"^" + re.escape(marca) + r"\s+", "", d["allestimento"] or "", flags=re.I)
+            d["modello"] = f"{marca.upper()} {nome}"
+            d["stato"] = stato
+            rows.append({k: d.get(k) for k in FIELDS})
+    return rows, scart
 
 
 def main():
@@ -236,66 +297,65 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", nargs="*", help="es. tesla/model-3 dacia/spring (prova su pochi modelli)")
     ap.add_argument("--limit", type=int, help="max modelli (per prove)")
-    ap.add_argument("--delay", type=float, default=1.0, help="secondi tra richieste")
+    ap.add_argument("--delay", type=float, default=0.5, help="pausa per richiesta, per ogni thread")
+    ap.add_argument("--workers", type=int, default=4, help="richieste in parallelo")
     ap.add_argument("--since", type=int, default=202301, help="considera modelli con versioni da aaaamm")
-    ap.add_argument("--full", action="store_true", help="controlla ogni versione di ogni modello (molto lento)")
-    ap.add_argument("--browser", action="store_true", help="scoperta con Playwright invece della sitemap")
+    ap.add_argument("--max-minutes", type=float, default=180, help="tempo massimo; poi salva il parziale")
+    ap.add_argument("--full", action="store_true", help="controlla ogni versione non termica di ogni modello")
+    ap.add_argument("--resume", action="store_true", help="riusa cache/versions.json di una corsa interrotta")
+    ap.add_argument("--sitemap", action="store_true", help="scoperta da sitemap invece che dal filtro elettrica")
     ap.add_argument("--debug", action="store_true")
     ARGS = ap.parse_args()
+    deadline = time.time() + ARGS.max_minutes * 60
+    if ARGS.resume and os.path.exists(CACHE_FILE):
+        CACHE.update(json.load(open(CACHE_FILE, encoding="utf-8")))
+        print(f"Cache: {len(CACHE)} schede riusate", flush=True)
     smap = {}
-    if ARGS.models:
-        models = ARGS.models
-    elif ARGS.browser:
-        models = discover_models()
-    else:
-        smap = discover_from_sitemap(ARGS.since)
-        models = sorted(smap)
-        if not models:
-            sys.exit("ERRORE: nessun modello trovato dalla sitemap. File esistenti NON modificati.")
-    if ARGS.limit:
-        models = models[:ARGS.limit]
-    print(f"{len(models)} modelli da controllare")
+    try:
+        if ARGS.models:
+            bev_models = ARGS.models
+        else:
+            bev_models = [] if ARGS.sitemap else discover_models()
+            if len(bev_models) < 50:
+                print("Ricerca con filtro non utilizzabile (o --sitemap): scoperta da sitemap", flush=True)
+                smap = discover_from_sitemap(ARGS.since)
+                if not smap:
+                    sys.exit("ERRORE: nessun modello trovato. File esistenti NON modificati.")
+                models = sorted(smap)[:ARGS.limit] if ARGS.limit else sorted(smap)
+                samples = {m: sample_urls(smap[m], ARGS.full) for m in models}
+                todo = sorted({u for v in samples.values() for u in v})
+                print(f"Fase 1: {len(todo)} schede campione su {len(models)} modelli", flush=True)
+                pmap(get_version, todo, "fase1", ARGS.workers, deadline)
+                bev_models = [m for m in models if any((CACHE.get(u) or {}).get("_bev") for u in samples[m])]
+                print(f"Modelli con almeno un BEV: {len(bev_models)}", flush=True)
+        if ARGS.limit:
+            bev_models = bev_models[:ARGS.limit]
+        # fase 2: tutti gli allestimenti dei modelli BEV
+        res = pmap(process_model, bev_models, "fase2", ARGS.workers, deadline)
+    finally:
+        save_cache()
     rows, scartate = [], []
-    for i, mod in enumerate(models, 1):
-        # 1) il modello ha almeno un allestimento BEV? (campione di versioni, o tutte con --full)
-        if mod in smap:
-            sample = sample_urls(smap[mod], ARGS.full)
-            if not any((CACHE.get(u) or get_version(u) or {}).get("_bev") for u in sample):
-                print(f"[{i}/{len(models)}] {mod}: nessun BEV nel campione")
-                continue
-        print(f"[{i}/{len(models)}] {mod}")
-        # 2) tutti gli allestimenti dalla pagina modello (+ quelli in sitemap), con lo stato
-        vers = model_versions(mod)
-        for _, u in smap.get(mod, []):
-            vers.setdefault(u, "disponibile")
-        marca, nome = mod.split("/", 1)
-        for url, stato in vers.items():
-            d = get_version(url)
-            if d is None:
-                scartate.append({"url": url, "motivo": "pagina non scaricata"})
-                continue
-            if not d.get("_bev"):
-                scartate.append({"url": url, "motivo": "non BEV (o scheda non riconosciuta)"})
-                continue
-            d = dict(d)
-            d["allestimento"] = re.sub(r"^" + re.escape(marca) + r"\s+", "", d["allestimento"] or "", flags=re.I)
-            d["modello"] = f"{marca.upper()} {nome}"
-            d["stato"] = stato
-            rows.append({k: d.get(k) for k in FIELDS})
+    for r in res.values():
+        if r:
+            rows += r[0]; scartate += r[1]
+    partial = time.time() > deadline
     if not rows:
         sys.exit("ERRORE: 0 allestimenti BEV trovati. File esistenti NON modificati (controlla debug/).")
+    rows = list({r["url"]: r for r in rows}.values())  # niente doppioni
+    rows.sort(key=lambda r: (r["modello"], r["prezzo"] or 0))
     os.makedirs("data", exist_ok=True)
     with open("data/ev_ita.csv", "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, FIELDS, delimiter=";")
         w.writeheader(); w.writerows(rows)
     with open("data/ev_ita.json", "w", encoding="utf-8") as f:
-        json.dump({"aggiornato": date.today().isoformat(), "righe": rows}, f, ensure_ascii=False, indent=1)
+        json.dump({"aggiornato": date.today().isoformat() + (" (PARZIALE: tempo scaduto)" if partial else ""),
+                   "righe": rows}, f, ensure_ascii=False, indent=1)
     with open("data/scartate.csv", "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, ["url", "motivo"], delimiter=";")
         w.writeheader(); w.writerows(scartate)
     import build_html
     build_html.build()
-    print(f"Fatto: {len(rows)} allestimenti BEV, {len(scartate)} scartati (vedi data/scartate.csv)")
+    print(f"Fatto{' (PARZIALE)' if partial else ''}: {len(rows)} allestimenti BEV, {len(scartate)} scartati", flush=True)
 
 
 if __name__ == "__main__":
