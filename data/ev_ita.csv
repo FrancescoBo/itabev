@@ -1,13 +1,14 @@
 ﻿modello;allestimento;tipo;posti;cap;h;w;l;m;pomol;ppeak;cons;vmax;prezzo;anno;autonomia;autonomia_fonte;stato;url
-TESLA model-3;Model 3;berlina 2/4 porte;5;62.5;144;185;472;1847;120;283;13;201;37970;2026;481;calcolata;disponibile;https://www.quattroruote.it/auto/tesla/model-3/model-3-rwd-143207202608
-TESLA model-3;Model 3;berlina 2/4 porte;5;75;144;185;472;1822;122;320;12.5;201;43670;2025;600;calcolata;disponibile;https://www.quattroruote.it/auto/tesla/model-3/model-3-long-range-rwd-premium-156939202512
-TESLA model-3;Model 3;berlina 2/4 porte;5;75;144;185;472;1899;208;498;14.3;201;49770;2025;524;calcolata;disponibile;https://www.quattroruote.it/auto/tesla/model-3/model-3-long-range-awd-premium-156937202512
-TESLA model-3;Model 3;berlina 2/4 porte;5;75;144;185;472;1830;258;627;16.5;262;58470;2025;455;calcolata;disponibile;https://www.quattroruote.it/auto/tesla/model-3/model-3-awd-performance-156938202512
-DACIA spring;Spring;berlina 3/5 porte;4;26.8;152;158;370;1026;26;45;14.1;125;17900;2024;190;calcolata;esaurimento scorte;https://www.quattroruote.it/auto/dacia/spring/spring-electric-45-expression-145574202404
-DACIA spring;Spring;berlina 3/5 porte;4;24.3;149;158;370;1070;26;71;12.4;125;17900;2025;196;calcolata;disponibile;https://www.quattroruote.it/auto/dacia/spring/spring-electric-70-expression-156660202510
-DACIA spring;Spring;berlina 3/5 porte;4;26.8;152;158;370;1049;26;65;13.9;125;18900;2024;193;calcolata;esaurimento scorte;https://www.quattroruote.it/auto/dacia/spring/spring-electric-65-expression-152287202404
-DACIA spring;Spring;berlina 3/5 porte;4;26.8;152;158;370;1026;26;45;14.1;125;19200;2024;190;calcolata;esaurimento scorte;https://www.quattroruote.it/auto/dacia/spring/spring-electric-45-business-145575202404
-DACIA spring;Spring;berlina 3/5 porte;4;24.3;149;158;370;1070;41;102;12.4;125;19700;2025;196;calcolata;esaurimento scorte;https://www.quattroruote.it/auto/dacia/spring/spring-electric-100-extreme-156661202510
-DACIA spring;Spring;berlina 3/5 porte;4;26.8;152;158;370;1049;26;65;13.9;125;19900;2024;193;calcolata;esaurimento scorte;https://www.quattroruote.it/auto/dacia/spring/spring-electric-65-extreme-147911202404
-DACIA spring;Spring;berlina 3/5 porte;4;24.3;149;158;370;1070;26;71;12.4;125;20400;2025;196;calcolata;disponibile;https://www.quattroruote.it/auto/dacia/spring/spring-electric-70-business-156662202510
-DACIA spring;Spring;berlina 3/5 porte;4;26.8;152;158;370;1049;26;65;13.9;125;20600;2024;193;calcolata;esaurimento scorte;https://www.quattroruote.it/auto/dacia/spring/spring-electric-65-business-152289202404
+ABARTH 500e;500e;berlina 3/5 porte;4;42.2;152;168;367;1410;64;155;17.2;155;34400;2023;245;calcolata;disponibile;https://www.quattroruote.it/auto/abarth/500e/500e-148923202305
+ABARTH 500e;500e;berlina 3/5 porte;4;42.2;152;168;367;1410;64;155;17.8;155;38900;2023;237;calcolata;disponibile;https://www.quattroruote.it/auto/abarth/500e/500e-turismo-148924202305
+ABARTH 500e-cabrio;500e Cabrio;cabrio e spider;4;42.2;152;168;367;1435;64;155;17.9;155;37400;2023;236;calcolata;disponibile;https://www.quattroruote.it/auto/abarth/500e-cabrio/500e-c-148925202305
+ABARTH 500e-cabrio;500e Cabrio;cabrio e spider;4;42.2;152;168;367;1435;64;155;18.7;155;41900;2023;226;calcolata;disponibile;https://www.quattroruote.it/auto/abarth/500e-cabrio/500e-c-turismo-148926202305
+ABARTH 600e;600e;Suv/Fuoristrada;5;54;156;178;419;1700;143;238;18.6;200;42250;2025;290;calcolata;disponibile;https://www.quattroruote.it/auto/abarth/600e/600e-turismo-154209202511
+ABARTH 600e;600e;Suv/Fuoristrada;5;54;156;178;419;1625;143;281;18.7;200;46250;2026;289;calcolata;disponibile;https://www.quattroruote.it/auto/abarth/600e/600e-competizione-158024202605
+AIWAYS u6;U6;Suv/Fuoristrada;5;63;164;188;481;1865;88;218;15.9;160;;2023;396;calcolata;disponibile;https://www.quattroruote.it/auto/aiways/u6/u6-63-kwh-prime-148378202303
+ALBA 65c;65c;berlina 3/5 porte;6;12;178;130;393;1299;11;27;;45;44082;2026;120;sito;disponibile;https://www.quattroruote.it/auto/alba/65c/6sc-157674202603
+ALFA-ROMEO junior;ALFA ROMEO Junior;Suv/Fuoristrada;5;54;153;178;417;1620;84;156;15;150;40250;2025;360;calcolata;disponibile;https://www.quattroruote.it/auto/alfa-romeo/junior/junior-156-cv-bev-152226202509
+ALFA-ROMEO junior;ALFA ROMEO Junior;Suv/Fuoristrada;5;54;153;178;417;1620;84;156;15;150;42150;2026;360;calcolata;disponibile;https://www.quattroruote.it/auto/alfa-romeo/junior/junior-156-cv-bev-sprint-156512202604
+ALFA-ROMEO junior;ALFA ROMEO Junior;Suv/Fuoristrada;5;54;153;178;417;1620;84;156;15;150;43650;2026;360;calcolata;disponibile;https://www.quattroruote.it/auto/alfa-romeo/junior/junior-156-cv-bev-ti-156513202604
+ALFA-ROMEO junior;ALFA ROMEO Junior;Suv/Fuoristrada;5;54;153;178;417;1620;84;156;15;150;46650;2026;360;calcolata;disponibile;https://www.quattroruote.it/auto/alfa-romeo/junior/junior-156-cv-bev-edizione-luna-rossa-159830202609
+ALFA-ROMEO junior;ALFA ROMEO Junior;Suv/Fuoristrada;5;54;151;178;417;1689;143;280;18.1;200;49850;2026;298;calcolata;disponibile;https://www.quattroruote.it/auto/alfa-romeo/junior/junior-280-cv-bev-veloce-154265202604
