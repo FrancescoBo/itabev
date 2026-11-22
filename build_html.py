@@ -29,7 +29,7 @@ select{padding:4px}
 .wrap{overflow:auto;max-height:76vh;border:1px solid #ddd}table{border-collapse:collapse;width:100%}
 th,td{padding:4px 8px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap}
 th{position:sticky;top:0;background:#f3f4f6;cursor:pointer;user-select:none}th .u{display:block;font-weight:400;color:#777;font-size:11px}
-td.t,th.t{text-align:left}tr:hover td{background:#f8fafc}.calc{color:#6b7280;font-style:italic}.na{color:#b91c1c}tr.esa td{color:#9a6700;background:#fffbeb}
+td.t,th.t{text-align:left}td a{color:#1d4ed8;text-decoration:none}td a:hover{text-decoration:underline}tr.esa td a{color:#9a6700}tr:hover td{background:#f8fafc}.calc{color:#6b7280;font-style:italic}.na{color:#b91c1c}tr.esa td{color:#9a6700;background:#fffbeb}
 .axes{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin-bottom:8px}
 #cv{width:100%;height:68vh;min-height:380px;border:1px solid #ddd;display:block;background:#fff}
 #tip{position:fixed;pointer-events:none;background:#111c;color:#fff;padding:6px 8px;border-radius:5px;font-size:12px;display:none;max-width:320px;line-height:1.35}
@@ -76,7 +76,7 @@ const COLS=[
  {k:"cons",l:"Consumo",u:"kWh/100km"},{k:"autonomia",l:"Autonomia",u:"km"},{k:"prezzo",l:"Prezzo",u:"€"},
  {k:"h",l:"H",u:"cm"},{k:"w",l:"W",u:"cm"},{k:"l",l:"L",u:"cm"},{k:"m",l:"M",u:"kg"},
  {k:"pomol",l:"P omol",u:"cv"},{k:"ppeak",l:"P peak",u:"cv"},{k:"anno",l:"Anno"},
- {k:"stato",l:"Stato",t:1},{k:"url",l:"Link",t:1}];
+ {k:"stato",l:"Stato",t:1}];
 const NUM=COLS.filter(c=>!c.t);
 DATA.forEach(d=>{d._s=(d.modello+" "+d.allestimento+" "+(d.tipo||"")+" "+d.anno+" "+d.stato).toLowerCase()});
 const $=id=>document.getElementById(id);
@@ -136,7 +136,7 @@ function renderTable(r){
  r=r.slice().sort((a,b)=>{const x=a[sk],y=b[sk];if(x==null)return 1;if(y==null)return -1;return(x>y?1:x<y?-1:0)*sd});
  document.querySelector("#t tbody").innerHTML=r.map(d=>`<tr class="${d.stato!="disponibile"?"esa":""}">`+COLS.map(c=>{const v=d[c.k];
   if(v==null||v==="")return '<td class="na">n.d.</td>';
-  if(c.k=="url")return `<td class="t"><a href="${v}" target="_blank" rel="noopener">scheda</a></td>`;
+  if(c.k=="allestimento")return `<td class="t"><a href="${d.url}" target="_blank" rel="noopener">${v}</a></td>`;
   if(c.k=="autonomia")return `<td class="${d.autonomia_fonte=="calcolata"?"calc":""}">${v}</td>`;
   if(c.t)return `<td class="t">${v}</td>`;
   return `<td>${fmt(v,c.k)}</td>`}).join("")+"</tr>").join("");
