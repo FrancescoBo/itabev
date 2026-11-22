@@ -164,8 +164,10 @@ def parse_version(url, html):
     soup = BeautifulSoup(html, "html.parser")
     text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
     d = {"url": url}
-    title = soup.find("h1")
-    d["allestimento"] = title.get_text(" ", strip=True) if title else None
+    h1 = soup.find("h1")                       # es. "DACIA <strong>Spring 2ª serie</strong>"
+    h2 = soup.select_one("h2.c-subtitles1")    # es. "Spring Electric 80 Expression"
+    d["modello"] = re.sub(r"\s+", " ", h1.get_text(" ", strip=True)) if h1 else None
+    d["allestimento"] = re.sub(r"\s+", " ", h2.get_text(" ", strip=True)) if h2 else None
     m = re.search(r"/auto/[^/]+/[^/]+/[^/]+-(\d+)(\d{4})(\d{2})$", url)
     d["anno"] = int(m.group(2)) if m else None
     m = re.search(r"Modello\s*:?\s*([a-zA-Zàèéìòù/ 0-9|]+?)\s+(?:Posti|Alimentazione|Motore)", text)
@@ -297,9 +299,14 @@ def process_model(mod):
             scart.append({"url": url, "motivo": "non BEV (o scheda non riconosciuta)"})
         else:
             d = dict(d)
-            nome_all = re.sub(r"-\d{9,}$", "", slug(url)).replace("-", " ")   # nome allestimento dall'URL
-            d["allestimento"] = nome_all[:1].upper() + nome_all[1:]
-            d["modello"] = etichetta
+            mod_v = d.get("modello") or ""
+            if not mod_v or "quattroruote" in mod_v.lower() or "/" in mod_v:   # titolo spurio (es. Polestar)
+                mod_v = etichetta
+            all_v = d.get("allestimento") or ""
+            if not all_v or "quattroruote" in all_v.lower() or "/" in all_v:
+                nome_all = re.sub(r"-\d{9,}$", "", slug(url)).replace("-", " ")
+                all_v = nome_all[:1].upper() + nome_all[1:]
+            d["modello"], d["allestimento"] = mod_v, all_v
             d["stato"] = stato
             rows.append({k: d.get(k) for k in FIELDS})
     return rows, scart
